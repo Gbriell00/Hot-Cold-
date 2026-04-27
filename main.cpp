@@ -8,6 +8,7 @@
 
 using ushort = unsigned short;
 
+//struct para armazenar informações do jogo
 struct running_options{
     //tamanho da entrada N
     size_t length {0};
@@ -17,11 +18,29 @@ struct running_options{
     //armazena valor da diferença
     size_t temp_diff_try{0};
     size_t actual_diff_try{0};
+    
+    //usado para comparar se a diferença é maior ou menor
     bool delta_diff{0};
 
+    //programa funciona diferente na primeira tentativa 
     bool first_try = true;
-    bool found{0};
-    bool stop{0};
+
+    //variável de controle para o loop do jogo
+    bool found = false;
+    bool stop = false;
+
+    //liga ou desliga a cpu do jogo
+    bool autoplay = false;
+
+    //0 = gerar secret number, 1 = gerar primeira tentativa da cpu
+    bool flag_generate_number = 0;
+};
+
+//struct para armazenar informações do modo automático
+struct cpu_autoplay{
+    std::vector<int> list_possible_numbers {};
+    size_t secret_number_id {0};
+    size_t first_guess {0};
 };
 
 //transforma o string que contém o tamanho de N em int
@@ -43,7 +62,7 @@ std::optional<int> string_to_int(const std::string& value){
 }
 
 //valida a entrada do número N do cli
-running_options validate_number(int argc, char* argv[],running_options& options){
+running_options validate_arguments(int argc, char* argv[],running_options& options){
    
     for(int i = 1; i < argc; i++){
           std:: string argument{argv[i]};
@@ -70,9 +89,11 @@ running_options validate_number(int argc, char* argv[],running_options& options)
            
             ++i;
         } 
-
+        else if(argument == "-autoplay"){
+            options.autoplay = true;
+        }
         else{
-            std::cout<<"invalid input. Correct form \" -N number \"."<<std::endl;
+            std::cout<<"invalid input. Correct form \" -N number or -N number -autoplay\"."<<std::endl;
         }
        
     }
@@ -81,7 +102,7 @@ running_options validate_number(int argc, char* argv[],running_options& options)
 }
     
 //gera o número secreto
-running_options generate_number(const size_t N, running_options& options ){
+void generate_number(const size_t N, running_options& options, cpu_autoplay& cpu){
 
 //inicializando o motor Mersenne Twister com seed
 std::random_device rd;
@@ -90,8 +111,13 @@ std::mt19937 gen(rd());
 //definindo intervalo
 std::uniform_int_distribution<> dis(1, N);
 
+if(options.flag_generate_number == 0){
 options.secret_number = dis(gen);
-return options;
+}
+
+if(options.flag_generate_number == 1){
+    cpu.first_guess = dis(gen);
+}
 }
 
 //calcula a distância absoluta
@@ -159,6 +185,23 @@ running_options validate_guess(int& guess, running_options& options){
     }    
 }
 
+cpu_autoplay initialize_vector (cpu_autoplay& cpu, running_options& options){
+    for(size_t i = 0; i < options.length; i++){
+        //adiciona o número ao final do vetor
+        cpu.list_possible_numbers.push_back(i+1);
+    }
+    cpu.secret_number_id = options.secret_number - 1;
+    return cpu;
+}
+
+cpu_autoplay first_guess(cpu_autoplay& cpu, running_options& options){
+    options.flag_generate_number = 1;
+    generate_number(options.length, options, cpu);
+    std::cout<<"First guess: "<< cpu.first_guess << std::endl;
+    return cpu;
+}
+
+
 int main (int argc, char* argv[]){
 
 std::cout<<"Welcome to hot_cold v1.0, by Gabriel Garcia"<<std::endl;
@@ -170,13 +213,19 @@ std::cout<<"[1,N], good luck!                         "<<std::endl;
 
 
 running_options options;
-options = validate_number(argc, argv, options);
+cpu_autoplay cpu;
+int guess;
 
-generate_number(options.length, options);
+
+options = validate_arguments(argc, argv, options);
+
+generate_number(options.length, options, cpu);
 
 while(!options.found or options.stop){
 
-    int guess;
+    //modo manual
+    if (options.autoplay == false){
+   
 
     std::cin>>guess;
     
@@ -196,6 +245,31 @@ while(!options.found or options.stop){
     validate_guess(guess, options);
 
 }
+    //modo automático
+    else{
+        
+        if (cpu.list_possible_numbers.empty()) {
+         initialize_vector(cpu, options);
+        }   
+       
+        
+        if(options.first_try){
+        first_guess(cpu, options);
+        guess = cpu.first_guess;
 
+        validate_guess(guess, options);
+        
+        }
+
+            for (size_t i = 0; i < cpu.list_possible_numbers.size(); i++) {
+              std::cout << cpu.list_possible_numbers[i] << " ";
+                }
+                std::cout << std::endl;
+
+        std::cout<<"Secret number: "<< options.secret_number << std::endl;
+        std::cout<<"Secret number id: "<< cpu.secret_number_id << std::endl;
+
+}
     return 0;
+}
 }
